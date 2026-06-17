@@ -47,7 +47,7 @@ Aplikasi ini menerapkan konsep struktur data dinamis `List of Dictionaries` deng
 
 | Halaman Utama & Dasbor | Formulir Input Pop-up |
 | --- | --- |
-|  |  |
+| <img width="640" height="360" alt="image" src="https://github.com/user-attachments/assets/e1f16115-54d2-40e2-b81f-5992ec0d2b51" />| <img width="436" height="398" alt="image" src="https://github.com/user-attachments/assets/4b2cec59-2f71-457b-8ad1-a54e73b2e760" /> |
 
 ---
 
