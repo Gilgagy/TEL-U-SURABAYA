@@ -1,1 +1,303 @@
+import tkinter as tk
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
+from tkinter import messagebox
 
+class FreelanceAppBootstrap:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Aplikasi Manajemen & Tracking Kegiatan Freelance")
+        self.root.geometry("950x650")
+        
+        # Database utama berupa list of dictionaries
+        self.database = []
+        
+        self.create_widgets()
+        self.refresh_table()
+
+    def create_widgets(self):
+        # Judul APK
+        title_label = tb.Label(
+            self.root, 
+            text="Freelance Project Tracker", 
+            font=("Helvetica", 20, "bold"), 
+            bootstyle="primary"
+        )
+        title_label.pack(pady=15)
+
+        # PANEL KONTROL CRUD (ATAS)
+        control_frame = tb.Frame(self.root)
+        control_frame.pack(fill="x", padx=25, pady=5)
+        
+        btn_add = tb.Button(control_frame, text="+ Tambah Proyek", bootstyle="success", command=self.open_add_window)
+        btn_add.pack(side="left", padx=5)
+        
+        btn_edit = tb.Button(control_frame, text="✏️ Ubah Proyek", bootstyle="warning", command=self.open_edit_window)
+        btn_edit.pack(side="left", padx=5)
+        
+        btn_delete = tb.Button(control_frame, text="🗑️ Hapus Proyek", bootstyle="danger", command=self.delete_project)
+        btn_delete.pack(side="left", padx=5)
+
+        # PANEL SORTING & PENCARIAN
+        side_frame = tb.Labelframe(self.root, text=" Fitur Analisis Data (Sort & Search) ", bootstyle="info")
+        side_frame.pack(fill="x", padx=25, pady=15)
+
+        # Sub-panel Sort
+        sort_frame = tb.Frame(side_frame)
+        sort_frame.pack(side="left", padx=15, pady=10)
+        tb.Button(sort_frame, text="Sort Deadline (Selection)", bootstyle="secondary-outline", command=self.sort_deadline).pack(side="left", padx=5)
+        tb.Button(sort_frame, text="Sort Bayaran (Insertion)", bootstyle="secondary-outline", command=self.sort_bayaran).pack(side="left", padx=5)
+
+        # Sub-panel Search
+        search_frame = tb.Frame(side_frame)
+        search_frame.pack(side="right", padx=15, pady=10)
+        
+        tb.Label(search_frame, text="Cari:").pack(side="left", padx=5)
+        self.entry_search = tb.Entry(search_frame, width=15)
+        self.entry_search.pack(side="left", padx=5)
+        
+        self.combo_key = tb.Combobox(search_frame, values=["Proyek", "Klien"], width=8, state="readonly")
+        self.combo_key.set("Proyek")
+        self.combo_key.pack(side="left", padx=5)
+        
+        self.combo_method = tb.Combobox(search_frame, values=["Sequential", "Binary"], width=11, state="readonly")
+        self.combo_method.set("Sequential")
+        self.combo_method.pack(side="left", padx=5)
+        
+        tb.Button(search_frame, text="Cari", bootstyle="info", command=self.search_project).pack(side="left", padx=5)
+        tb.Button(search_frame, text="Reset", bootstyle="dark-outline", command=self.refresh_table).pack(side="left", padx=5)
+
+        # TABEL UTAMA (TREEVIEW BOOTSTRAP)
+        table_frame = tb.Frame(self.root)
+        table_frame.pack(fill="both", expand=True, padx=25, pady=5)
+        
+        columns = ("No", "Proyek", "Klien", "Deadline", "Status", "Bayaran")
+        self.tree = tb.Treeview(table_frame, columns=columns, show="headings", bootstyle="primary")
+        
+        # Desain Kolom
+        self.tree.heading("No", text="No")
+        self.tree.heading("Proyek", text="Nama Proyek")
+        self.tree.heading("Klien", text="Nama Klien")
+        self.tree.heading("Deadline", text="Deadline (YYYY-MM-DD)")
+        self.tree.heading("Status", text="Status")
+        self.tree.heading("Bayaran", text="Bayaran (Rp)")
+        
+        self.tree.column("No", width=50, anchor="center")
+        self.tree.column("Proyek", width=220)
+        self.tree.column("Klien", width=160)
+        self.tree.column("Deadline", width=140, anchor="center")
+        self.tree.column("Status", width=110, anchor="center")
+        self.tree.column("Bayaran", width=140, anchor="e")
+        
+        scrollbar = tb.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # PANEL LAPORAN / STATISTIK (BAWAH) 
+        self.stat_frame = tb.Labelframe(self.root, text=" Laporan Statistik Ringkas ", bootstyle="dark")
+        self.stat_frame.pack(fill="x", padx=25, pady=20)
+        
+        self.lbl_total = tb.Label(self.stat_frame, text="Total Proyek: 0", font=("Helvetica", 10))
+        self.lbl_total.pack(side="left", padx=20, pady=15)
+        
+        self.lbl_jalan = tb.Label(self.stat_frame, text="Sedang Berjalan: 0", bootstyle="warning", font=("Helvetica", 10, "bold"))
+        self.lbl_jalan.pack(side="left", padx=20, pady=15)
+        
+        self.lbl_selesai = tb.Label(self.stat_frame, text="Selesai: 0", bootstyle="success", font=("Helvetica", 10, "bold"))
+        self.lbl_selesai.pack(side="left", padx=20, pady=15)
+        
+        self.lbl_income = tb.Label(self.stat_frame, text="Total Pendapatan: Rp0", bootstyle="primary", font=("Helvetica", 11, "bold"))
+        self.lbl_income.pack(side="right", padx=20, pady=15)
+
+    # REFRESH TABEL & STATISTIK 
+    def refresh_table(self, data_to_show=None):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+            
+        display_data = data_to_show if data_to_show is not None else self.database
+        
+        for i, p in enumerate(display_data):
+            self.tree.insert("", "end", values=(i, p["proyek"], p["klien"], p["deadline"], p["status"], f"Rp{p['bayaran']:,}"))
+            
+        # Perhitungan Laporan
+        total = len(self.database)
+        berjalan = len([p for p in self.database if p["status"] in ["Pending", "Ongoing"]])
+        selesai = len([p for p in self.database if p["status"] == "Selesai"])
+        pendapatan = sum(p["bayaran"] for p in self.database if p["status"] == "Selesai")
+        
+        self.lbl_total.config(text=f"Total Proyek: {total}")
+        self.lbl_jalan.config(text=f"Sedang Berjalan: {berjalan}")
+        self.lbl_selesai.config(text=f"Selesai: {selesai}")
+        self.lbl_income.config(text=f"Total Pendapatan (Selesai): Rp{pendapatan:,}")
+
+    # FORM WINDOW (POP-UP) 
+    def open_add_window(self):
+        self.form_window(title="Tambah Proyek Baru", callback=self.save_new_project)
+
+    def open_edit_window(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Peringatan", "Pilih data pada tabel terlebih dahulu!")
+            return
+        
+        index = int(self.tree.item(selected[0])['values'][0])
+        project_data = self.database[index]
+        
+        self.form_window(title="Ubah Data Proyek", data=project_data, callback=lambda d: self.save_edit_project(index, d))
+
+    def form_window(self, title, data=None, callback=None):
+        win = tb.Toplevel(self.root)
+        win.title(title)
+        win.geometry("400x380")
+        win.grab_set() 
+        
+        container = tb.Frame(win, padding=15)
+        container.pack(fill="both", expand=True)
+
+        tb.Label(container, text="Nama Proyek:").grid(row=0, column=0, padx=5, pady=10, sticky="w")
+        ent_proyek = tb.Entry(container, width=25)
+        ent_proyek.grid(row=0, column=1, padx=5, pady=10)
+        
+        tb.Label(container, text="Nama Klien:").grid(row=1, column=0, padx=5, pady=10, sticky="w")
+        ent_klien = tb.Entry(container, width=25)
+        ent_klien.grid(row=1, column=1, padx=5, pady=10)
+        
+        tb.Label(container, text="Deadline (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=10, sticky="w")
+        ent_deadline = tb.Entry(container, width=25)
+        ent_deadline.grid(row=2, column=1, padx=5, pady=10)
+        
+        tb.Label(container, text="Status Proyek:").grid(row=3, column=0, padx=5, pady=10, sticky="w")
+        combo_status = tb.Combobox(container, values=["Pending", "Ongoing", "Selesai"], width=23, state="readonly")
+        combo_status.grid(row=3, column=1, padx=5, pady=10)
+        combo_status.set("Pending")
+        
+        tb.Label(container, text="Bayaran (Rp):").grid(row=4, column=0, padx=5, pady=10, sticky="w")
+        ent_bayaran = tb.Entry(container, width=25)
+        ent_bayaran.grid(row=4, column=1, padx=5, pady=10)
+        
+        if data:
+            ent_proyek.insert(0, data["proyek"])
+            ent_klien.insert(0, data["klien"])
+            ent_deadline.insert(0, data["deadline"])
+            combo_status.set(data["status"])
+            ent_bayaran.insert(0, data["bayaran"])
+            
+        def submit():
+            p = ent_proyek.get().strip()
+            k = ent_klien.get().strip()
+            d = ent_deadline.get().strip()
+            s = combo_status.get()
+            b = ent_bayaran.get().strip()
+            
+            if not p or not k or not d or not b:
+                messagebox.showerror("Error", "Semua kolom harus diisi!")
+                return
+            if not (len(d) == 10 and d[4] == '-' and d[7] == '-'):
+                messagebox.showerror("Error", "Format deadline salah! Harus YYYY-MM-DD")
+                return
+            try:
+                b_int = int(b)
+                if b_int < 0: raise ValueError
+            except ValueError:
+                messagebox.showerror("Error", "Bayaran harus diisi angka positif!")
+                return
+                
+            callback({"proyek": p, "klien": k, "deadline": d, "status": s, "bayaran": b_int})
+            win.destroy()
+
+        btn_save = tb.Button(container, text="Simpan Data", bootstyle="primary", width=20, command=submit)
+        btn_save.grid(row=5, column=0, columnspan=2, pady=20)
+
+    def save_new_project(self, data):
+        self.database.append(data)
+        self.refresh_table()
+        messagebox.showinfo("Sukses", "Proyek baru berhasil ditambahkan!")
+
+    def save_edit_project(self, index, data):
+        self.database[index] = data
+        self.refresh_table()
+        messagebox.showinfo("Sukses", "Data proyek berhasil diperbarui!")
+
+    def delete_project(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Peringatan", "Pilih data yang ingin dihapus terlebih dahulu!")
+            return
+            
+        index = int(self.tree.item(selected[0])['values'][0])
+        nama_p = self.database[index]["proyek"]
+        
+        if messagebox.askyesno("Konfirmasi", f"Apakah Anda yakin ingin menghapus proyek '{nama_p}'?"):
+            self.database.pop(index)
+            self.refresh_table()
+            messagebox.showinfo("Sukses", "Data berhasil dihapus.")
+
+    # ALGORITMA SORTING 
+    def sort_deadline(self):
+        # Selection Sort (Ascending)
+        n = len(self.database)
+        for i in range(n):
+            min_index = i
+            for j in range(i+1, n):
+                if self.database[j]["deadline"] < self.database[min_index]["deadline"]:
+                    min_index = j
+            self.database[i], self.database[min_index] = self.database[min_index], self.database[i]
+        self.refresh_table()
+        messagebox.showinfo("Selection Sort", "Data diurutkan berdasarkan deadline terdekat.")
+
+    def sort_bayaran(self):
+        # Insertion Sort (Descending)
+        for i in range(1, len(self.database)):
+            key = self.database[i]
+            j = i - 1
+            while j >= 0 and self.database[j]["bayaran"] < key["bayaran"]:
+                self.database[j+1] = self.database[j]
+                j -= 1
+            self.database[j+1] = key
+        self.refresh_table()
+        messagebox.showinfo("Insertion Sort", "Data diurutkan berdasarkan pendapatan tertinggi.")
+
+    # ALGORITMA SEARCHING 
+    def search_project(self):
+        target = self.entry_search.get().strip()
+        if not target:
+            messagebox.showwarning("Peringatan", "Ketik kata kunci pencarian!")
+            return
+            
+        key_map = {"Proyek": "proyek", "Klien": "klien"}
+        key = key_map[self.combo_key.get()]
+        method = self.combo_method.get()
+        
+        hasil = []
+        
+        if method == "Sequential":
+            for p in self.database:
+                if p[key].lower() == target.lower():
+                    hasil.append(p)
+        else:
+            # Binary Search
+            db_urut = sorted(self.database, key=lambda x: x[key].lower())
+            left, right = 0, len(db_urut) - 1
+            while left <= right:
+                mid = (left + right) // 2
+                if db_urut[mid][key].lower() == target.lower():
+                    hasil.append(db_urut[mid])
+                    break
+                elif db_urut[mid][key].lower() < target.lower():
+                    left = mid + 1
+                else:
+                    right = mid - 1
+                    
+        if hasil:
+            self.refresh_table(data_to_show=hasil)
+            messagebox.showinfo("Hasil", f"Ditemukan {len(hasil)} data menggunakan {method} Search.")
+        else:
+            messagebox.showinfo("Hasil", "Data tidak ditemukan.")
+
+# PROGRAM UTAMA
+if __name__ == "__main__":
+    root = tb.Window(themename="flatly")
+    app = FreelanceAppBootstrap(root)
+    root.mainloop()
